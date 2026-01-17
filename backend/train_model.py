@@ -13,7 +13,7 @@ def train():
         print("❌ Data not found. Run 'data/prepare_data.py' first.")
         return
 
-    print(f"📊 Loaded {len(data)} rows of data.")
+    print(f"Loaded {len(data)} rows of data.")
 
     # 2. Preprocessing
     # Drop columns not needed for training (like empty columns if any)
@@ -43,13 +43,13 @@ def train():
     X_train, X_test, y_train, y_test = train_test_split(X_encoded, y_encoded, test_size=0.2, random_state=42)
 
     # 5. Train
-    print("🧠 Training Random Forest Model...")
+    print("Training Random Forest Model...")
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
 
     # 6. Evaluate
     acc = accuracy_score(y_test, model.predict(X_test))
-    print(f"✅ Model Trained. Accuracy: {acc*100:.2f}%")
+    print(f"Model Trained. Accuracy: {acc*100:.2f}%")
 
     # 7. Save
     # We save the model AND the encoders to handle future data
@@ -60,7 +60,7 @@ def train():
         'target_encoder': y_encoder
     }
     joblib.dump(model_data, 'backend/health_model.pkl')
-    print("💾 Model saved to 'backend/health_model.pkl'")
+    print("Model saved to 'backend/health_model.pkl'")
 
 if __name__ == "__main__":
     train()

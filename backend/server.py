@@ -12,24 +12,24 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'health_model.pkl')
 SUGGESTIONS_PATH = os.path.join(BASE_DIR, 'suggestions.json')
 
-print("⏳ Loading Model...")
+print("Loading Model...")
 try:
     model_data = joblib.load(MODEL_PATH)
     model = model_data['model']
     feature_names = model_data['features']
     target_encoder = model_data.get('target_encoder')
-    print("✅ Model Loaded.")
+    print("Model Loaded.")
 except Exception as e:
-    print(f"❌ Failed to load model: {e}")
+    print(f"Failed to load model: {e}")
     model = None
 
-print("⏳ Loading Suggestions...")
+print("Loading Suggestions...")
 try:
     with open(SUGGESTIONS_PATH, 'r') as f:
         suggestions_db = json.load(f)
     print("✅ Suggestions Database Loaded.")
 except Exception as e:
-    print(f"❌ Failed to load suggestions: {e}")
+    print(f"Failed to load suggestions: {e}")
     suggestions_db = {}
 
 @app.route('/predict', methods=['POST'])
@@ -39,7 +39,7 @@ def predict():
 
     try:
         data = request.json
-        print(f"📩 Received Payload: {data}")
+        print(f"Received Payload: {data}")
 
         # 1. Prepare Input Vector (all zeros initially)
         input_vector = [0] * len(feature_names)
@@ -59,7 +59,7 @@ def predict():
                 # For sensors, value is float. For symptoms, it's 1.
                 input_vector[idx] = float(value)
             else:
-                print(f"⚠️ Warning: input '{key}' not found in model features.")
+                print(f"Warning: input '{key}' not found in model features.")
 
         # 3. Predict
         prediction_idx = model.predict([input_vector])[0]
@@ -70,7 +70,7 @@ def predict():
         else:
             disease = str(prediction_idx)
 
-        print(f"🧠 Predicted: {disease}")
+        print(f"Predicted: {disease}")
 
         # 5. Get Suggestions
         suggestion_info = suggestions_db.get(disease, {
@@ -86,10 +86,10 @@ def predict():
         })
 
     except Exception as e:
-        print(f"❌ Error during prediction: {e}")
+        print(f"Error during prediction: {e}")
         return jsonify({"error": str(e)}), 400
 
 if __name__ == '__main__':
-    print("🚀 Server starting on port 5000...")
+    print("Server starting on port 5000...")
     # The 'use_reloader=False' stops the infinite restart loop!
     app.run(debug=True, port=5000, use_reloader=False)

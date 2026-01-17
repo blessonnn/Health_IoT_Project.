@@ -5,8 +5,14 @@ import numpy as np
 def create_hybrid_dataset():
     # 1. Load the Kaggle Dataset
     try:
-        df = pd.read_csv(r'B:\project\Health_IoT_Project\data\Disease_symptom_and_patient_profile_dataset.csv') # Ensure this path matches where you put the file
-        print("✅ Raw dataset loaded successfully.")
+        # Load the larger dataset for better accuracy
+        df = pd.read_csv(r'B:\project\Health_IoT_Project\data\Training.csv')
+        
+        # Rename 'prognosis' to 'Disease' to match our logic
+        if 'prognosis' in df.columns:
+            df.rename(columns={'prognosis': 'Disease'}, inplace=True)
+            
+        print("✅ Raw dataset (Training.csv) loaded successfully.")
     except FileNotFoundError:
         print("❌ Error: 'Training.csv' not found in data/ folder. Please download it first.")
         return

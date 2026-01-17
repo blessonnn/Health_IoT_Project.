@@ -1,0 +1,4 @@
+Loaded 4920 rows of data.
+Training Random Forest Model...
+Model Trained. Accuracy: 100.00%
+Model saved to 'backend/health_model.pkl'
