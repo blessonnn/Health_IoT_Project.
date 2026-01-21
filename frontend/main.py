@@ -184,7 +184,7 @@ def get_prioritized_symptoms(sensor_data, all_symptoms):
 SORTED_SYMPTOMS = get_prioritized_symptoms(sensor_vals, ALL_SYMPTOMS)
 
 st.subheader("Symptoms Checklist")
-st.info("Based on your sensors, we've prioritized relevant symptoms. Please select at least **5** total.")
+st.info("Based on your sensors, we've prioritized relevant symptoms. Please select any applicable symptoms.")
 
 
 
@@ -262,14 +262,9 @@ symptom_payload["Outcome Variable"] = 0
 st.write("---")
 description = st.text_area("Detailed Description (Optional)", placeholder="Tell us more about how you feel...")
 
-# Enforce Minimum 5 Selection
-selected_count = len(selected_symptoms)
-can_submit = selected_count >= 5
-
-if not can_submit:
-    st.warning(f"⚠️ Please select {5 - selected_count} more symptom(s) to generate a diagnosis.")
+# removed Minimum 5 Selection enforcement as per user request
     
-if st.button("Generate Diagnosis", disabled=not can_submit, use_container_width=True):
+if st.button("Generate Diagnosis", use_container_width=True):
     # Proceed even if mostly empty, as we have sensors
     pass
 
