@@ -147,6 +147,9 @@ ALL_SYMPTOMS = [
     "yellow_crust_ooze"
 ]
 
+# Remove duplicates if any (e.g. fluid_overload appears twice in original dataset)
+ALL_SYMPTOMS = sorted(list(set(ALL_SYMPTOMS)))
+
 # --- SENSOR HEURISTICS ---
 # Define related symptoms for prioritization
 TEMP_SYMPTOMS = ["high_fever", "mild_fever", "chills", "shivering", "sweating", "headache", "muscle_pain", "fatigue"]
@@ -183,8 +186,14 @@ SORTED_SYMPTOMS = get_prioritized_symptoms(sensor_vals, ALL_SYMPTOMS)
 st.subheader("Symptoms Checklist")
 st.info("Based on your sensors, we've prioritized relevant symptoms. Please select at least **5** total.")
 
-if "selected_symptoms" not in st.session_state:
-    st.session_state.selected_symptoms = []
+
+
+# --- SELECTION STATE MANAGEMENT ---
+# Instead of manually managing a list with callbacks (which causes sync issues),
+# we derive the selected symptoms directly from the checkbox states (st.session_state).
+# This ensures that what you see is always what you get.
+
+selected_symptoms = [s for s in ALL_SYMPTOMS if st.session_state.get(s, False)]
 
 if "symptom_page" not in st.session_state:
     st.session_state.symptom_page = 1
@@ -192,8 +201,8 @@ if "symptom_page" not in st.session_state:
 ITEMS_PER_PAGE = 10
 
 # 1. Display currently selected summary
-if st.session_state.selected_symptoms:
-    st.write(f"**Selected ({len(st.session_state.selected_symptoms)}):** {', '.join(st.session_state.selected_symptoms)}")
+if selected_symptoms:
+    st.write(f"**Selected ({len(selected_symptoms)}):** {', '.join(selected_symptoms)}")
 
 # 2. Render Checkboxes for current page
 start_idx = (st.session_state.symptom_page - 1) * ITEMS_PER_PAGE
@@ -210,14 +219,9 @@ else:
         st.caption("🔥 These symptoms are common with high temperature.")
         
     for sym in current_batch:
-        is_checked = sym in st.session_state.selected_symptoms
-        def update_symptom(s=sym):
-            if s in st.session_state.selected_symptoms:
-                st.session_state.selected_symptoms.remove(s)
-            else:
-                st.session_state.selected_symptoms.append(s)
-        
-        st.checkbox(sym.replace("_", " ").title(), value=is_checked, key=sym, on_change=update_symptom)
+        # We rely on Streamlit's internal state for the checkbox.
+        # Key=sym ensures the state persists even when navigating pages.
+        st.checkbox(sym.replace("_", " ").title(), key=sym)
 
 # 3. Navigation
 c_prev, c_center, c_next = st.columns([1, 1, 1])
@@ -244,7 +248,7 @@ with c_next:
 # Map to payload
 # Reset payload symptom keys first
 for sym in ALL_SYMPTOMS:
-    if sym in st.session_state.selected_symptoms:
+    if sym in selected_symptoms:
         symptom_payload[sym] = 1
 
 # Add Demographics to payload
@@ -259,7 +263,7 @@ st.write("---")
 description = st.text_area("Detailed Description (Optional)", placeholder="Tell us more about how you feel...")
 
 # Enforce Minimum 5 Selection
-selected_count = len(st.session_state.selected_symptoms)
+selected_count = len(selected_symptoms)
 can_submit = selected_count >= 5
 
 if not can_submit:
