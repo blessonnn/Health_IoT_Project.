@@ -9,6 +9,156 @@ BACKEND_URL = "http://127.0.0.1:5000/predict"  # Point to your Flask API
 
 st.set_page_config(page_title="VitalPulse | Patient Portal", page_icon="🏥", layout="wide")
 
+# --- PREMIUM SPLASH SCREEN ---
+st.markdown("""
+<div id="vitalpulse-splash">
+    <div class="splash-container">
+        <h1 class="splash-text">VitalPulse</h1>
+        <div class="pulse-ring"></div>
+        <p class="tap-hint">Click anywhere to explore</p>
+    </div>
+</div>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+
+/* Force-remove Streamlit margins and the white background 'bleeding' */
+html, body, [data-testid="stAppViewContainer"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: #000000 !important; /* Prevents white edges when blurring */
+}
+
+#vitalpulse-splash {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.4); /* Darker backdrop for better contrast */
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    z-index: 9999999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: 'Outfit', sans-serif;
+}
+
+.splash-container {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.splash-text {
+    font-size: clamp(60px, 12vw, 120px);
+    font-weight: 900;
+    margin: 0;
+    letter-spacing: -4px;
+    line-height: 1;
+    color: #FFFFFF;
+    text-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    /* High contrast gradient for visibility on any background */
+    background: linear-gradient(180deg, #FFFFFF 0%, #E0E0E0 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: textEntrance 1.2s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+.pulse-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    z-index: -1;
+    animation: ringPulse 4s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+.tap-hint {
+    margin-top: 40px;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    opacity: 0;
+    animation: fadeIn 1s ease 0.8s forwards;
+}
+
+@keyframes textEntrance {
+    0% { opacity: 0; transform: scale(0.95) translateY(20px); filter: blur(10px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+}
+
+@keyframes ringPulse {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    50% { opacity: 0.4; }
+    100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+
+@keyframes fadeIn {
+    to { opacity: 1; }
+}
+
+/* Background App State */
+/* Removing the double blur on .stApp to keep it 'glassy' not 'foggy' */
+.stApp {
+    transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.splash-active .stApp {
+    transform: scale(1.02); /* Slight zoom for depth */
+}
+
+.splash-hidden {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transform: scale(1.1) !important;
+    pointer-events: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# Inject the JavaScript to handle clicks and session persistence
+# This targets the parent document to ensure the splash screen 
+# can be controlled across Streamlit reruns.
+import streamlit.components.v1 as components
+components.html("""
+<script>
+    const parentDoc = window.parent.document;
+    const splash = parentDoc.getElementById('vitalpulse-splash');
+    const app = parentDoc.querySelector('.stApp');
+
+    function initSplash() {
+        // Removed sessionStorage check so it appears on every refresh
+        parentDoc.body.classList.add('splash-active');
+        if (splash) splash.classList.remove('splash-hidden');
+    }
+
+    if (splash) {
+        splash.addEventListener('click', () => {
+            splash.classList.add('splash-hidden');
+            parentDoc.body.classList.remove('splash-active');
+            // We can still set the item, but we don't check for it in init
+            sessionStorage.setItem('splash_dismissed', 'true');
+        });
+    }
+
+    initSplash();
+</script>
+""", height=0)
+
 # --- APPLE STYLE CSS (Kept exactly as you wrote it) ---
 st.markdown("""
     <style>
@@ -294,8 +444,4 @@ if st.button("Generate Diagnosis", use_container_width=True):
                 st.error(f"Server Error: {response.status_code}")
                 
         except requests.exceptions.ConnectionError:
-            st.error("❌ Could not connect to the Backend. Is 'main.py' (Flask) running?")
-
-# Animation
-if pulse_anim:
-    st_lottie(pulse_anim, height=150, key="pulse")
+            st.error("❌ Could not connect to the Backend. Is 'server.py' (Flask) running?")
