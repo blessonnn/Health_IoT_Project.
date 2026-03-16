@@ -327,12 +327,31 @@ st.info("Based on your sensors, we've prioritized relevant symptoms. Please sele
 
 
 
-# --- SELECTION STATE MANAGEMENT ---
-# Instead of manually managing a list with callbacks (which causes sync issues),
-# we derive the selected symptoms directly from the checkbox states (st.session_state).
-# This ensures that what you see is always what you get.
+# --- SECTION 3: DESCRIPTION & SYMPTOMS ---
+# We place the description first so it can influence the selections
+description = st.text_area("Detailed Description (Optional)", placeholder="Tell us more about how you feel... e.g., 'I have a high fever and my chest hurts'")
 
-selected_symptoms = [s for s in ALL_SYMPTOMS if st.session_state.get(s, False)]
+# Extraction logic from text description
+def extract_symptoms_from_text(text, all_symptoms):
+    extracted = set()
+    if not text:
+        return extracted
+    text = text.lower().replace("-", " ").replace(",", " ")
+    for sym in all_symptoms:
+        # Match symptom parts (e.g., 'chest_pain' matches 'chest pain' or 'pain in chest')
+        search_term = sym.replace("_", " ")
+        if search_term in text:
+            extracted.add(sym)
+    return extracted
+
+symptoms_from_text = extract_symptoms_from_text(description, ALL_SYMPTOMS)
+
+# Checklist selections
+selected_symptoms_from_checklist = [s for s in ALL_SYMPTOMS if st.session_state.get(s, False)]
+
+# Final merged list for calculation
+# Union of checklist selections + text-extracted keywords
+selected_symptoms = list(set(selected_symptoms_from_checklist) | symptoms_from_text)
 
 if "symptom_page" not in st.session_state:
     st.session_state.symptom_page = 1
@@ -397,51 +416,51 @@ symptom_payload["Blood Pressure"] = bp_val
 symptom_payload["Cholesterol Level"] = chol_val
 symptom_payload["Outcome Variable"] = 0 
 
-# --- SECTION 3: DESCRIPTION & SUBMIT ---
+# --- SECTION 4: DIAGNOSIS GENERATION ---
 st.write("---")
-description = st.text_area("Detailed Description (Optional)", placeholder="Tell us more about how you feel...")
-
-# removed Minimum 5 Selection enforcement as per user request
     
 if st.button("Generate Diagnosis", use_container_width=True):
-    # Proceed even if mostly empty, as we have sensors
-    pass
+    if not selected_symptoms:
+        st.warning("⚠️ Please select at least one symptom to get a prediction.")
+    else:
+        with st.spinner("Analyzing Vitals & Symptoms with AI..."):
+            # 1. CONSTRUCT FINAL PAYLOAD
+            # IMPORTANT: The model was trained on CELSIUS (Normal ~37, Fever ~39).
+            # We must convert the Fahrenheit sensor value before sending.
+            temp_f = sensor_vals['temp']
+            temp_c = (temp_f - 32) * 5 / 9
 
-    with st.spinner("Analyzing Vitals & Symptoms with AI..."):
-        
-        # 1. CONSTRUCT FINAL PAYLOAD
-        # Combine Sensor Data + Symptom Data
-        final_payload = {
-            "Sensor_Temp": sensor_vals['temp'], # Must match backend expectation
-            "Sensor_HR": sensor_vals['hr'],
-            "Sensor_SpO2": sensor_vals['spo2']
-        }
-        # Merge the symptoms into the payload
-        final_payload.update(symptom_payload)
+            final_payload = {
+                "Sensor_Temp": round(temp_c, 2), 
+                "Sensor_HR": sensor_vals['hr'],
+                "Sensor_SpO2": sensor_vals['spo2']
+            }
+            # Merge the symptoms into the payload
+            final_payload.update(symptom_payload)
 
-        # 2. SEND TO BACKEND
-        try:
-            response = requests.post(BACKEND_URL, json=final_payload)
-            
-            if response.status_code == 200:
-                result = response.json()
+            # 2. SEND TO BACKEND
+            try:
+                response = requests.post(BACKEND_URL, json=final_payload)
                 
-                # 3. DISPLAY RESULTS
-                # st.balloons() - Removed as per user request
-                st.success("Analysis Complete")
-                
-                disease = result.get("disease", "Unknown")
-                suggestion = result.get("suggestion", "Consult a doctor.")
-                
-                st.markdown(f"""
-                    <div class="metric-card" style="background: #E8F2FF; border: none;">
-                        <h3 style="color: #007AFF;">Potential Condition: {disease}</h3>
-                        <p style="font-size: 18px; color: black;"><strong>Suggestion:</strong> {suggestion}</p>
-                        <p style="font-size: 12px; color: gray; margin-top: 10px;">Based on HR: {sensor_vals['hr']} and reported symptoms.</p>
-                    </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.error(f"Server Error: {response.status_code}")
-                
-        except requests.exceptions.ConnectionError:
-            st.error("❌ Could not connect to the Backend. Is 'server.py' (Flask) running?")
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    # 3. DISPLAY RESULTS
+                    # st.balloons() - Removed as per user request
+                    st.success("Analysis Complete")
+                    
+                    disease = result.get("disease", "Unknown")
+                    suggestion = result.get("suggestion", "Consult a doctor.")
+                    
+                    st.markdown(f"""
+                        <div class="metric-card" style="background: #E8F2FF; border: none;">
+                            <h3 style="color: #007AFF;">Potential Condition: {disease}</h3>
+                            <p style="font-size: 18px; color: black;"><strong>Suggestion:</strong> {suggestion}</p>
+                            <p style="font-size: 12px; color: gray; margin-top: 10px;">Based on HR: {sensor_vals['hr']} and reported symptoms.</p>
+                        </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.error(f"Server Error: {response.status_code}")
+                    
+            except requests.exceptions.ConnectionError:
+                st.error("❌ Could not connect to the Backend. Is 'server.py' (Flask) running?")
