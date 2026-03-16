@@ -98,21 +98,10 @@ st.write("Please fill in the details below:")
 c1, c2 = st.columns(2)
 with c1:
     age = st.number_input("Age", min_value=1, max_value=120, value=30)
-    gender = st.selectbox("Gender", ["Male", "Female"])
-    gender_val = 1 if gender == "Male" else 0 # Assuming 1 for Male, 0 for Female based on typical encoding
+    gender_val = st.selectbox("Gender", ["Male", "Female"])
 with c2:
-    bp = st.selectbox("Blood Pressure", ["Normal", "High", "Low"]) 
-    # Heuristic mapping for BP if model expects categorical or numeric. 
-    # The feature list just says 'Blood Pressure'. Assuming encoded or categorical. 
-    # For safety, let's look at the model training script or data if possible, but for now we'll assume binary/categorical or raw.
-    # Given 'Outcome Variable' is in features, this dataset might be "Disease Prediction Logic" style.
-    # Let's map 'High' to 1, 'Normal' to 0 for now or use a slider if it looks numeric.
-    # UPDATE: I'll use a number input for Systolic BP just in case, or keep it simple.
-    # Let's guess it's a category for now.
-    bp_val = 1 if bp == "High" else 0
-    
-    chol = st.selectbox("Cholesterol Level", ["Normal", "High"])
-    chol_val = 1 if chol == "High" else 0
+    bp_val = st.selectbox("Blood Pressure", ["Normal", "High", "Low"]) 
+    chol_val = st.selectbox("Cholesterol Level", ["Normal", "High"])
 
 st.markdown("---")
 # --- LOAD SYMPTOMS ---

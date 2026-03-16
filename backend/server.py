@@ -45,21 +45,31 @@ def predict():
         input_vector = [0] * len(feature_names)
 
         # 2. Map Payload to Features
-        # The payload keys (e.g., 'Sensor_Temp', 'headache') might not match exactly 
-        # with feature names (e.g., 'Headache', 'Sensor_Temp') in terms of case.
-        # So we try to match case-insensitively or mapped.
-        
-        # Create a map of {lowercase_feature: index} for easy lookup
         feature_map = {name.lower(): i for i, name in enumerate(feature_names)}
+        encoders = model_data.get('encoders', {})
+        # Create a lowercase map for encoders too
+        encoder_map = {k.lower(): v for k, v in encoders.items()}
 
         for key, value in data.items():
             key_lower = key.lower()
             if key_lower in feature_map:
                 idx = feature_map[key_lower]
-                # For sensors, value is float. For symptoms, it's 1.
-                input_vector[idx] = float(value)
+                
+                # Check if we have an encoder for this column
+                if key_lower in encoder_map:
+                    try:
+                        # Value should be a string (e.g., 'Male', 'High')
+                        encoded_val = encoder_map[key_lower].transform([str(value)])[0]
+                        input_vector[idx] = float(encoded_val)
+                    except Exception as e:
+                        print(f"Encoding error for {key}: {e}")
+                        input_vector[idx] = 0.0
+                else:
+                    # For sensors and symptoms, value is float or int
+                    input_vector[idx] = float(value)
             else:
-                print(f"Warning: input '{key}' not found in model features.")
+                if key != "Outcome Variable":
+                    print(f"Warning: input '{key}' not found in model features.")
 
         # 3. Predict
         prediction_idx = model.predict([input_vector])[0]

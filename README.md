@@ -10,6 +10,41 @@
 6. [Machine Learning Model Build Process](#machine-learning-model-build-process)
 7. [API Details](#api-details)
 8. [Detailed Code Walkthrough](#detailed-code-walkthrough)
+9. [How to Run the Project](#how-to-run-the-project)
+
+---
+
+## 9. How to Run the Project
+
+Yes, since this project relies on specific Python libraries (like Flask, Streamlit, Scikit-Learn, and Pandas), you need to activate the Virtual Environment (`venv`) where these dependencies are installed before running anything.
+
+### Step 1: Activate the Virtual Environment
+Open your terminal (Command Prompt or PowerShell) inside the `Health_IoT_Project` folder and run:
+```bash
+# On Windows
+venv\Scripts\activate
+
+# On Mac/Linux
+source venv/bin/activate
+```
+*(You will see `(venv)` appear at the beginning of your terminal prompt once it's activated.)*
+
+### Step 2: Start the Backend (Flask API)
+The backend must be running for the frontend to make predictions. Run this in your terminal:
+```bash
+python backend/server.py
+```
+*(Leave this terminal running. It will start the server on `http://127.0.0.1:5000`)*
+
+### Step 3: Start the Frontend (Streamlit Portal)
+Open a **new** terminal window, activate the `venv` again, and run the frontend app:
+```bash
+# Don't forget to activate venv in the new terminal!
+venv\Scripts\activate
+
+streamlit run frontend/main.py
+```
+*(This will automatically open the Patient Portal in your web browser.)*
 
 ---
 
