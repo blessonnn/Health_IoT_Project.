@@ -5,7 +5,8 @@ import json
 from streamlit_lottie import st_lottie
 
 # --- CONFIGURATION ---
-BACKEND_URL = "http://127.0.0.1:5000/predict"  # Point to your Flask API
+BACKEND_URL = "http://10.255.199.23:5000/predict"
+SENSOR_URL = "http://10.255.199.23:5000/sensors"
 
 st.set_page_config(page_title="VitalPulse | Patient Portal", page_icon="🏥", layout="wide")
 
@@ -138,20 +139,23 @@ components.html("""
 <script>
     const parentDoc = window.parent.document;
     const splash = parentDoc.getElementById('vitalpulse-splash');
-    const app = parentDoc.querySelector('.stApp');
 
     function initSplash() {
-        // Removed sessionStorage check so it appears on every refresh
-        parentDoc.body.classList.add('splash-active');
-        if (splash) splash.classList.remove('splash-hidden');
+        // Check if user already dismissed it in this session
+        if (sessionStorage.getItem('splash_dismiss_vp') === 'true') {
+            if (splash) splash.classList.add('splash-hidden');
+            parentDoc.body.classList.remove('splash-active');
+        } else {
+            parentDoc.body.classList.add('splash-active');
+            if (splash) splash.classList.remove('splash-hidden');
+        }
     }
 
     if (splash) {
         splash.addEventListener('click', () => {
             splash.classList.add('splash-hidden');
             parentDoc.body.classList.remove('splash-active');
-            // We can still set the item, but we don't check for it in init
-            sessionStorage.setItem('splash_dismissed', 'true');
+            sessionStorage.setItem('splash_dismiss_vp', 'true');
         });
     }
 
@@ -199,38 +203,89 @@ pulse_anim = load_lottieurl("https://assets5.lottiefiles.com/packages/lf20_V9t63
 
 # --- MOCK IOT DATA FETCH ---
 # In the future, replace this with requests.get('http://esp32-ip-address/data')
+# --- REAL IOT DATA FETCH ---
 def get_sensor_data():
-    return {
-        "temp": 99.1,  # Example: Slightly high
-        "hr": 92,      # Example: Elevated
-        "spo2": 96
-    }
+    try:
+        # Using localhost instead of 127.0.0.1 and increasing timeout to 2s
+        response = requests.get(SENSOR_URL, timeout=2)
+        if response.status_code == 200:
+            data = response.json()
+            temp_c = data.get("Sensor_Temp", 37.0)
+            temp_f = (temp_c * 9/5) + 32
+            return {
+                "temp_c": round(temp_c, 1),
+                "temp_f": round(temp_f, 1),
+                "hr": data.get("Sensor_HR", 75),
+                "spo2": data.get("Sensor_SpO2", 98)
+            }
+        else:
+            print(f"Backend returned error: {response.status_code}")
+    except Exception as e:
+        # We use print instead of st.error here to avoid Threading/ScriptRunContext warnings
+        print(f"📡 [STREAMLIT SYNC ERROR]: {e}")
+    
+    # Fallback values
+    return {"temp_c": 0.0, "temp_f": 0.0, "hr": 0, "spo2": 0} 
 
-sensor_vals = get_sensor_data()
+# --- INITIALIZE SESSION STATE ---
+if "latest_sensors" not in st.session_state:
+    st.session_state.latest_sensors = get_sensor_data()
 
 # --- HEADER ---
 st.markdown('<p class="main-title">Health Overview</p>', unsafe_allow_html=True)
 
-# --- SECTION 1: IOT VITALS ---
-col1, col2, col3 = st.columns(3)
+# --- SECTION 1: IOT VITALS (Live Fragment) ---
+@st.fragment(run_every=2) # 2 seconds refresh
+def sync_vitals():
+    sensor_vals = get_sensor_data()
+    # Check if we have real data (non-zero)
+    if sensor_vals['temp_c'] > 0:
+        badge_style = "background: #34C759; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px;"
+        badge_text = "LIVE"
+    else:
+        badge_style = "background: #FF9500; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px;"
+        badge_text = "SYNCING"
 
-with col1:
-    st.markdown(f"""<div class="metric-card">
-        <p style="color: #86868B; font-size: 14px; text-transform: uppercase;">Temperature</p>
-        <p style="font-size: 32px; font-weight: 600; color: #1D1D1F;">{sensor_vals['temp']}°F</p>
-    </div>""", unsafe_allow_html=True)
+    st.markdown(f'<span style="{badge_style}">{badge_text}</span> <span style="font-size: 12px; color: gray;">Last Check: {time.strftime("%H:%M:%S")}</span>', unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        temp_c = sensor_vals['temp_c']
+        temp_f = sensor_vals['temp_f']
+        if temp_c > 0:
+            temp_display = f"{temp_c}°C / {temp_f}°F"
+        else:
+            temp_display = "---"
+            
+        st.markdown(f"""<div class="metric-card">
+            <p style="color: #86868B; font-size: 14px; text-transform: uppercase;">Temperature</p>
+            <p style="font-size: 28px; font-weight: 600; color: #1D1D1F;">{temp_display}</p>
+        </div>""", unsafe_allow_html=True)
+        
+    with col2:
+        hr_display = f"{sensor_vals['hr']} BPM" if sensor_vals['hr'] > 0 else "---"
+        st.markdown(f"""<div class="metric-card">
+            <p style="color: #86868B; font-size: 14px; text-transform: uppercase;">Heart Rate</p>
+            <p style="font-size: 32px; font-weight: 600; color: #FF2D55;">{hr_display}</p>
+        </div>""", unsafe_allow_html=True)
+        
+    with col3:
+        spo2_display = f"{sensor_vals['spo2']}%" if sensor_vals['spo2'] > 0 else "---"
+        st.markdown(f"""<div class="metric-card">
+            <p style="color: #86868B; font-size: 14px; text-transform: uppercase;">Oxygen (SpO2)</p>
+            <p style="font-size: 32px; font-weight: 600; color: #007AFF;">{spo2_display}</p>
+        </div>""", unsafe_allow_html=True)
+    st.caption(f"✨ Live Sync active | Last Check: {time.strftime('%H:%M:%S')}")
+    # Store in session state so the rest of the app (like Diagnosis button) can see it
+    st.session_state.latest_sensors = sensor_vals
+    return sensor_vals
 
-with col2:
-    st.markdown(f"""<div class="metric-card">
-        <p style="color: #86868B; font-size: 14px; text-transform: uppercase;">Heart Rate</p>
-        <p style="font-size: 32px; font-weight: 600; color: #FF2D55;">{sensor_vals['hr']} BPM</p>
-    </div>""", unsafe_allow_html=True)
+# Render the fragment
+sync_vitals()
 
-with col3:
-    st.markdown(f"""<div class="metric-card">
-        <p style="color: #86868B; font-size: 14px; text-transform: uppercase;">Oxygen (SpO2)</p>
-        <p style="font-size: 32px; font-weight: 600; color: #007AFF;">{sensor_vals['spo2']}%</p>
-    </div>""", unsafe_allow_html=True)
+# Use session state for the rest of the script
+sensor_vals_for_logic = st.session_state.latest_sensors
 
 st.write("---")
 
@@ -319,8 +374,12 @@ def get_prioritized_symptoms(sensor_data, all_symptoms):
     
     return valid_priority + remaining
 
-# Get sorted list based on CURRENT sensor values
-SORTED_SYMPTOMS = get_prioritized_symptoms(sensor_vals, ALL_SYMPTOMS)
+# Get sorted list based on CURRENT sensor values (from session state)
+SORTED_SYMPTOMS = get_prioritized_symptoms({
+    "temp": sensor_vals_for_logic.get("temp_f", 0),
+    "hr": sensor_vals_for_logic.get("hr", 0),
+    "spo2": sensor_vals_for_logic.get("spo2", 0)
+}, ALL_SYMPTOMS)
 
 st.subheader("Symptoms Checklist")
 st.info("Based on your sensors, we've prioritized relevant symptoms. Please select any applicable symptoms.")
@@ -373,8 +432,6 @@ else:
     st.write(f"**Set {st.session_state.symptom_page}**")
     
     # Optional: Logic to see if we are in "Priority Zone"
-    if st.session_state.symptom_page == 1 and sensor_vals['temp'] > 99:
-        st.caption("🔥 These symptoms are common with high temperature.")
         
     for sym in current_batch:
         # We rely on Streamlit's internal state for the checkbox.
@@ -425,15 +482,13 @@ if st.button("Generate Diagnosis", use_container_width=True):
     else:
         with st.spinner("Analyzing Vitals & Symptoms with AI..."):
             # 1. CONSTRUCT FINAL PAYLOAD
-            # IMPORTANT: The model was trained on CELSIUS (Normal ~37, Fever ~39).
-            # We must convert the Fahrenheit sensor value before sending.
-            temp_f = sensor_vals['temp']
-            temp_c = (temp_f - 32) * 5 / 9
-
+            # We use the LATEST data captured in session state
+            current_vitals = st.session_state.latest_sensors
+            
             final_payload = {
-                "Sensor_Temp": round(temp_c, 2), 
-                "Sensor_HR": sensor_vals['hr'],
-                "Sensor_SpO2": sensor_vals['spo2']
+                "Sensor_Temp": current_vitals.get('temp_c', 0), 
+                "Sensor_HR": current_vitals.get('hr', 0),
+                "Sensor_SpO2": current_vitals.get('spo2', 0)
             }
             # Merge the symptoms into the payload
             final_payload.update(symptom_payload)
@@ -456,7 +511,7 @@ if st.button("Generate Diagnosis", use_container_width=True):
                         <div class="metric-card" style="background: #E8F2FF; border: none;">
                             <h3 style="color: #007AFF;">Potential Condition: {disease}</h3>
                             <p style="font-size: 18px; color: black;"><strong>Suggestion:</strong> {suggestion}</p>
-                            <p style="font-size: 12px; color: gray; margin-top: 10px;">Based on HR: {sensor_vals['hr']} and reported symptoms.</p>
+                            <p style="font-size: 12px; color: gray; margin-top: 10px;">Based on HR: {current_vitals.get('hr', 0)} and reported symptoms.</p>
                         </div>
                     """, unsafe_allow_html=True)
                 else:

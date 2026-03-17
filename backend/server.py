@@ -7,6 +7,29 @@ import os
 
 app = flask.Flask(__name__)
 
+# --- GLOBAL STORE FOR LATEST SENSOR DATA ---
+latest_sensors = {
+    "Sensor_Temp": 37.0,
+    "Sensor_HR": 75,
+    "Sensor_SpO2": 98
+}
+
+def update_sensor_cache(data):
+    """Helper to update the global cache whenever sensor keys are seen."""
+    global latest_sensors
+    updated = False
+    if data:
+        print(f"🔥 [RAW DATA RECEIVED]: {data}")
+        for key in ["Sensor_Temp", "Sensor_HR", "Sensor_SpO2"]:
+            if key in data:
+                try:
+                    latest_sensors[key] = float(data[key])
+                    updated = True
+                except: pass
+    if updated:
+        print(f"✅ [CACHE SYNCED]: {latest_sensors}")
+
+
 # --- LOAD RESOURCES ON STARTUP ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, 'health_model.pkl')
@@ -32,14 +55,36 @@ except Exception as e:
     print(f"Failed to load suggestions: {e}")
     suggestions_db = {}
 
+@app.route('/sensors', methods=['POST', 'GET'])
+def sensors():
+    if request.method == 'POST':
+        # Try to get JSON first, if not, try form data
+        data = request.get_json(silent=True)
+        if not data:
+            data = request.form.to_dict()
+        
+        if data:
+            update_sensor_cache(data)
+            return jsonify({"status": "success"}), 200
+        else:
+            return jsonify({"status": "error", "message": "No data received"}), 400
+    else:
+        # GET request: return ONLY the latest values
+        # We do NOT touch request.json here to avoid 415 errors
+        return jsonify(latest_sensors), 200
+
 @app.route('/predict', methods=['POST'])
 def predict():
     if not model:
         return jsonify({"error": "Model not loaded"}), 500
 
     try:
-        data = request.json
-        print(f"Received Payload: {data}")
+        # Use get_json(silent=True) to be safer
+        data = request.get_json(silent=True) or {}
+        # Catch sensor data here too!
+        update_sensor_cache(data)
+        
+        print(f"Received Prediction Request: {data}")
 
         # 1. Prepare Input Vector (all zeros initially)
         input_vector = [0] * len(feature_names)
@@ -102,4 +147,4 @@ def predict():
 if __name__ == '__main__':
     print("Server starting on port 5000...")
     # The 'use_reloader=False' stops the infinite restart loop!
-    app.run(debug=True, port=5000, use_reloader=False)
+    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)

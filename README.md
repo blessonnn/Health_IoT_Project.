@@ -2,19 +2,20 @@
 
 ## 📌 Table of Contents
 
-1. [Project Overview](#project-overview)
-2. [How It Works](#how-it-works)
-3. [Technology Stack & Tools Used](#technology-stack--tools-used)
-4. [System Architecture](#system-architecture)
-5. [Frontend to Backend Connection](#frontend-to-backend-connection)
-6. [Machine Learning Model Build Process](#machine-learning-model-build-process)
-7. [API Details](#api-details)
-8. [Detailed Code Walkthrough](#detailed-code-walkthrough)
-9. [How to Run the Project](#how-to-run-the-project)
+1. [Project Overview](#1-project-overview)
+2. [Current Status & Recent Updates](#2-current-status--recent-updates)
+3. [How It Works](#3-how-it-works)
+4. [Technology Stack & Tools Used](#4-technology-stack--tools-used)
+5. [System Architecture](#5-system-architecture)
+6. [Frontend to Backend Connection](#6-frontend-to-backend-connection)
+7. [Machine Learning Model Build Process](#7-machine-learning-model-build-process)
+8. [API Details](#8-api-details)
+9. [Detailed Code Walkthrough](#9-detailed-code-walkthrough)
+10. [How to Run the Project](#10-how-to-run-the-project)
 
 ---
 
-## 9. How to Run the Project
+## 10. How to Run the Project
 
 Yes, since this project relies on specific Python libraries (like Flask, Streamlit, Scikit-Learn, and Pandas), you need to activate the Virtual Environment (`venv`) where these dependencies are installed before running anything.
 
@@ -56,7 +57,25 @@ By taking both numeric vitals and qualitative symptoms, the system uses an AI-po
 
 ---
 
-## 2. How It Works
+## 2. Current Status & Recent Updates
+
+**Current Build Version:** v2.1.0 (Stable)
+
+### ✅ **Milestones Achieved:**
+- **100% Model Accuracy**: The Random Forest Classifier has reached the highest possible accuracy on the current training dataset (4920 records), ensuring high-confidence predictions.
+- **Natural Language Symptom Extraction**: Users can now describe their symptoms in plain English. The system automatically extracts key symptoms from the text using a keyword-mapping algorithm, reducing the need for manual checkbox selection.
+- **Dynamic UX Prioritization**: The interface now intelligently re-orders the symptom list based on real-time IoT sensor data. (e.g., Fever-related symptoms move to the top if the temperature is high).
+- **Premium Apple-Style UI**: The portal features a modern "Glassmorphism" design, a dynamic splash screen with pulse animations, and interactive metric cards.
+- **Robust Feature Mapping**: The backend now supports case-insensitive mapping and dynamic encoding for demographic data (Gender, BP, Cholesterol).
+
+### 🛠️ **In Progress:**
+- [ ] **Real-time ESP32 Integration**: Transitioning from mock sensor data to real-time HTTP streams from IoT hardware.
+- [ ] **Multi-language Support**: Expanding the symptom extraction to support more languages.
+- [ ] **User History Dashboard**: Adding a database layer to track patient diagnostics over time.
+
+---
+
+## 3. How It Works
 
 The lifecycle of a single user request follows these steps:
 
@@ -172,33 +191,30 @@ Expected dynamic keys that represent IoT sensors and symptoms from the dataset. 
 
 ---
 
-## 8. Detailed Code Walkthrough
+## 9. Detailed Code Walkthrough
 
 ### A. Frontend (`frontend/main.py`)
 This file is the Streamlit web application.
-* **Lines 1-10:** Imports necessary libraries (`streamlit`, `requests`, `json`) and sets the page configuration.
-* **Lines 12-37:** Injects custom Apple-style CSS to make the web app look modern (blur effects, fonts, card styling).
-* **Lines 52-60:** A mock function `get_sensor_data()` acts as a placeholder for real IoT data fetching.
-* **Lines 61-86:** Streamlit UI configuration that sets up 3 visually appealing Metric Cards for generic Temperature, Heart Rate, and SpO2 inputs.
-* **Lines 97-151:** Sets up the UI for Demographics (Age, Gender) and lists over 100 possible textual symptoms defined in an `ALL_SYMPTOMS` list.
-* **Lines 153-184 `get_prioritized_symptoms()`:** A brilliant UX inclusion. A heuristic function that grabs the current vitals and pushes related symptoms to the front of the list. E.g., if heart rate is >100, it prioritizing showing "palpitations" and "anxiety" checkboxes first.
-* **Lines 191-260 (Pagination & Selection):** Handles Streamlit session states to group 130+ symptoms into paginated lists of 10 items per page with Next/Previous buttons so the user isn't overwhelmed. Checkbox selections are dynamically bundled into the payload array.
-* **Lines 267-312 (Submission Logic):** Triggers when the user clicks "Generate Diagnosis". It compiles `final_payload` merging Sensors and Symptoms, pushes a `POST` request using `requests`, handles HTTP errors or connection loss, unpacks the response data, and dynamically renders the response on a stylized card.
+* **Lines 1-5:** Imports for Streamlit, Requests, and Lottie animations.
+* **Lines 12-160:** **Splash Screen & Persistence**: Injects a premium full-screen splash animation with JavaScript to handle session-based dismissal.
+* **Lines 163-187:** **Apple-Style CSS**: Custom styles for Glassmorphism, metric cards, and Inter typography.
+* **Lines 202-209:** **IoT Emulation**: Mock function simulating sensor readings (Temp, HR, SpO2).
+* **Lines 237-255:** **Demographics**: Collects Age, Gender, BP, and Cholesterol levels.
+* **Lines 298-323:** **Sensor Heuristics**: Sorts 130+ symptoms dynamically to show relevant ones first based on current vitals.
+* **Lines 330-354:** **NLP Symptom Extraction**: A text area where users can describe their condition. The code automatically parses the text and checks corresponding symptom boxes.
+* **Lines 356-404:** **Paginated Checklist**: Organizes the massive symptom list into manageable pages of 10 items for a cleaner UX.
+* **Lines 422-466:** **Inference Logic**: Triggered by "Generate Diagnosis". Converts Fahrenheit to Celsius, bundles the JSON payload, calls the Flask API, and renders the result on a stylized card.
 
 ### B. Backend API (`backend/server.py`)
-This file acts as the inference server using Flask.
-* **Lines 1-8:** Imports `flask`, `joblib` (for loading the model) and starts the app.
-* **Lines 10-34 (Resource Initialization):** Highly optimized. The API loads the large `health_model.pkl` and `suggestions.json` specifically during server startup instead of at response time. This ensures extremely fast (<100ms) prediction times.
-* **Line 35 `@app.route('/predict')`:** Maps incoming POST requests.
-* **Lines 44-46:** Prepares a completely flat vector/array initialized with zeros (`[0, 0, 0...]`). Its length exactly matches the number of features the machine learning model was trained on.
-* **Lines 47-63 (Vector Mapping):** A critical part. The payload dictionary from frontend contains keys that might be randomly ordered or in different cases. The backend loops through the payload, matches keys case-insensitively with the original model's feature names, and flips the index in the flat vector (e.g., changing index 24 from 0 to 1 if "headache" is provided).
-* **Lines 64-74 (Prediction & Decoding):** `.predict()` is run on this formatted vector. The output is a number, which the exact same `LabelEncoder` (passed within the `.pkl` file) converts back into the disease text format.
-* **Lines 75-87:** Looks alongside the `suggestions.json` database based on the disease, and constructs a completely enriched `jsonify` response containing descriptions and formatted precautions back to the frontend.
+The inference engine and API bridge.
+* **Lines 10-33:** **Cold-Start Optimization**: Loads the `.pkl` model and `suggestions.json` once on startup, ensuring sub-100ms response times.
+* **Lines 35-43:** **Route Handler**: Listens for POST requests at `/predict`.
+* **Lines 44-73:** **Feature Alignment**: Maps incoming JSON keys to the model's expected 0/1 vector. Includes robust case-insensitive matching and categorical encoding for Gender/BP/Cholesterol.
+* **Lines 74-84:** **ML Inference**: Passes the vector to the Random Forest model and decodes the numeric prediction back into a disease name.
+* **Lines 85-96:** **Response Enrichment**: Matches the disease to a suggestion in the database and returns a complete diagnostic package.
 
 ### C. ML Training (`backend/train_model.py`)
-Creates the intelligence module. 
-* **Lines 8-16:** Reads the Kaggle-format `final_train_data.csv` dataset.
-* **Lines 18-26:** Scrapes away garbage/empty data rows ("Unnamed: 133"). Splits "Disease" into the target Label (`y`), and everything else into the Features list (`X`).
-* **Lines 27-41 (Data Encoding System):** Strings cannot be multiplied in Random Forest logic. Loops over all String (`object`) columns, trains a `LabelEncoder()` specifically for that column to convert strings to deterministic integers, and stores the encoder explicitly into a `label_encoders` dictionary.
-* **Lines 42-53:** Splits 80/20. Initializes standard Scikit `RandomForestClassifier`, calls `.fit`, and prints accuracy against the 20% validation chunk.
-* **Lines 54-64 (Artifact Export):** Prepares a dictionary named `model_data` consisting of the trained `model`, the exact `features` array, input `encoders`, and output/target `y_encoder`. Running `joblib.dump()` on this bundles all parts into `health_model.pkl` to safely serve the backend.
+The script used to build the intelligence.
+* **Data Sources**: Processes the cleaned training CSV.
+* **System**: Uses a `RandomForestClassifier` for its ability to handle high-dimensional symptom data without overfitting.
+* **Artifacts**: Bundles the `model`, `feature_names`, and `LabelEncoders` into a single `health_model.pkl` for portable deployment.
