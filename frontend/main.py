@@ -512,20 +512,20 @@ c_prev, c_center, c_next = st.columns([1, 1, 1])
 
 with c_prev:
     if st.session_state.symptom_page > 1:
-        if st.button("⬅️ Previous Set"):
+        if st.button("Previous Set"):
             st.session_state.symptom_page -= 1
             st.rerun()
 
 with c_center:
     # "Skip" button just acts as "Next" visually to say "I don't need any here"
     if end_idx < len(SORTED_SYMPTOMS):
-         if st.button("Skip Set ⏭️"):
+         if st.button("Skip Set"):
             st.session_state.symptom_page += 1
             st.rerun()
 
 with c_next:
     if end_idx < len(SORTED_SYMPTOMS):
-        if st.button("Next Set ➡️"):
+        if st.button("Next Set"):
             st.session_state.symptom_page += 1
             st.rerun()
 
@@ -545,7 +545,7 @@ symptom_payload["Outcome Variable"] = 0
 # --- SECTION 4: DIAGNOSIS GENERATION ---
 st.write("---")
     
-if st.button("Generate Diagnosis", use_container_width=True):
+if st.button("Generate Diagnosis"):
     if not selected_symptoms:
         st.warning("⚠️ Please select at least one symptom to get a prediction.")
     else:
