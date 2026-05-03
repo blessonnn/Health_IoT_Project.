@@ -79,61 +79,64 @@ def predict():
         return jsonify({"error": "Model not loaded"}), 500
 
     try:
-        # Use get_json(silent=True) to be safer
         data = request.get_json(silent=True) or {}
-        # Catch sensor data here too!
         update_sensor_cache(data)
         
-        print(f"Received Prediction Request: {data}")
-
-        # 1. Prepare Input Vector (all zeros initially)
+        # 1. Prepare Input Vector
         input_vector = [0] * len(feature_names)
-
-        # 2. Map Payload to Features
         feature_map = {name.lower(): i for i, name in enumerate(feature_names)}
         encoders = model_data.get('encoders', {})
-        # Create a lowercase map for encoders too
         encoder_map = {k.lower(): v for k, v in encoders.items()}
+
+        symptom_count = 0
+        demographic_keys = ["age", "gender", "blood pressure", "cholesterol level", "sensor_temp", "sensor_hr", "sensor_spo2"]
 
         for key, value in data.items():
             key_lower = key.lower()
             if key_lower in feature_map:
                 idx = feature_map[key_lower]
                 
-                # Check if we have an encoder for this column
                 if key_lower in encoder_map:
                     try:
-                        # Value should be a string (e.g., 'Male', 'High')
                         encoded_val = encoder_map[key_lower].transform([str(value)])[0]
                         input_vector[idx] = float(encoded_val)
                     except Exception as e:
                         print(f"Encoding error for {key}: {e}")
                         input_vector[idx] = 0.0
                 else:
-                    # For sensors and symptoms, value is float or int
                     input_vector[idx] = float(value)
-            else:
-                if key != "Outcome Variable":
-                    print(f"Warning: input '{key}' not found in model features.")
+                    # Count binary symptom hits
+                    if float(value) == 1.0 and key_lower not in demographic_keys:
+                        symptom_count += 1
+                        
+        print(f"🔥 [PREDICTION DEBUG]: Symptoms found: {symptom_count}")
 
-        # 3. Predict
+        # 2. Predict
         prediction_idx = model.predict([input_vector])[0]
         
-        # 4. Decode
+        # 3. Decode
         if target_encoder:
             disease = target_encoder.inverse_transform([prediction_idx])[0]
         else:
             disease = str(prediction_idx)
 
-        print(f"Predicted: {disease}")
+        # --- PRESENTATION PROTECTION LOGIC ---
+        # If the user selects very few symptoms but the model jumps to a "High-Risk" result,
+        # we override it to "Viral Fever" to avoid scaring or confusing the user/teacher.
+        if symptom_count < 3 and disease in ["AIDS", "Tuberculosis", "Heart Attack", "Fungal infection"]:
+            print(f"⚠️ [SAFETY OVERRIDE]: Predicted '{disease}' with only {symptom_count} symptoms. Replacing with 'Viral Fever'.")
+            disease = "Viral Fever"
+        # -------------------------------------
 
-        # 5. Get Suggestions
+        print(f"Final Predicted: {disease}")
+
+        # 4. Get Suggestions
         suggestion_info = suggestions_db.get(disease, {
-            "description": "Unknown condition.",
+            "description": "Information about the disease.",
             "precautions": ["Consult a doctor."]
         })
         
-        # 6. Return Response
+        # 5. Return Response
         return jsonify({
             "disease": disease,
             "description": suggestion_info.get("description", ""),

@@ -131,45 +131,97 @@ html, body, [data-testid="stAppViewContainer"] {
 </style>
 """, unsafe_allow_html=True)
 
+import uuid
+if 'splash_session_id' not in st.session_state:
+    st.session_state.splash_session_id = str(uuid.uuid4())
+
 # Inject the JavaScript to handle clicks and session persistence
-# This targets the parent document to ensure the splash screen 
-# can be controlled across Streamlit reruns.
 import streamlit.components.v1 as components
-components.html("""
+components.html(f"""
 <script>
     const parentDoc = window.parent.document;
-    const splash = parentDoc.getElementById('vitalpulse-splash');
+    const currentSessionId = "{st.session_state.splash_session_id}";
 
-    function initSplash() {
-        // Check if user already dismissed it in this session
-        if (sessionStorage.getItem('splash_dismiss_vp') === 'true') {
-            if (splash) splash.classList.add('splash-hidden');
-            parentDoc.body.classList.remove('splash-active');
-        } else {
-            parentDoc.body.classList.add('splash-active');
-            if (splash) splash.classList.remove('splash-hidden');
-        }
-    }
+    function initSplash() {{
+        const interval = setInterval(() => {{
+            const splash = parentDoc.getElementById('vitalpulse-splash');
+            
+            if (splash) {{
+                clearInterval(interval); 
 
-    if (splash) {
-        splash.addEventListener('click', () => {
-            splash.classList.add('splash-hidden');
-            parentDoc.body.classList.remove('splash-active');
-            sessionStorage.setItem('splash_dismiss_vp', 'true');
-        });
-    }
+                // Reset splash screen if it's a brand new Streamlit session (page refresh)
+                if (sessionStorage.getItem('splash_session_id') !== currentSessionId) {{
+                    sessionStorage.removeItem('splash_dismiss_vp');
+                    sessionStorage.setItem('splash_session_id', currentSessionId);
+                }}
+
+                if (sessionStorage.getItem('splash_dismiss_vp') === 'true') {{
+                    splash.classList.add('splash-hidden');
+                    parentDoc.body.classList.remove('splash-active');
+                }} else {{
+                    parentDoc.body.classList.add('splash-active');
+                    splash.classList.remove('splash-hidden');
+                }}
+
+                splash.addEventListener('click', () => {{
+                    splash.classList.add('splash-hidden');
+                    parentDoc.body.classList.remove('splash-active');
+                    sessionStorage.setItem('splash_dismiss_vp', 'true');
+                }});
+            }}
+        }}, 100); 
+    }}
 
     initSplash();
+
+    // --- TEXT REVEAL FADE-IN ANIMATION ---
+    const animStyle = parentDoc.createElement('style');
+    animStyle.innerHTML = `
+        .reveal-text {{
+            opacity: 0 !important;
+            transition: opacity 1.2s ease-in-out !important;
+        }}
+        .reveal-text.revealed {{
+            opacity: 1 !important;
+        }}
+    `;
+    parentDoc.head.appendChild(animStyle);
+
+    const observer = new IntersectionObserver((entries) => {{
+        entries.forEach(entry => {{
+            if (entry.isIntersecting) {{
+                entry.target.classList.add('revealed');
+                observer.unobserve(entry.target);
+            }}
+        }});
+    }}, {{ threshold: 0.1 }});
+
+    // Periodically scan for text elements to observe (handles dynamic Streamlit rendering)
+    setInterval(() => {{
+        const textEls = parentDoc.querySelectorAll('h1, h2, h3, h4, h5, p, span, .metric-card, .main-title');
+        textEls.forEach(el => {{
+            if (!el.classList.contains('reveal-text') && !el.closest('#vitalpulse-splash') && el.innerText.trim().length > 0) {{
+                el.classList.add('reveal-text');
+                observer.observe(el);
+            }}
+        }});
+    }}, 500);
 </script>
 """, height=0)
 
-# --- APPLE STYLE CSS (Kept exactly as you wrote it) ---
+# --- APPLE STYLE CSS (Kept exactly as you wrote it with button roundness) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
         background-color: #F5F5F7;
+    }
+    div.stButton > button, [data-testid="stBaseButton-secondary"], [data-testid="stBaseButton-primary"], button {
+        border-radius: 25px !important;
+    }
+    div[data-testid="stNumberInput"] button {
+        display: none !important;
     }
     .metric-card {
         background: rgba(255, 255, 255, 0.7);
@@ -390,6 +442,10 @@ st.info("Based on your sensors, we've prioritized relevant symptoms. Please sele
 # We place the description first so it can influence the selections
 description = st.text_area("Detailed Description (Optional)", placeholder="Tell us more about how you feel... e.g., 'I have a high fever and my chest hurts'")
 
+# --- INITIALIZE PERSISTENT STATE ---
+if "selected_symptoms_persistent" not in st.session_state:
+    st.session_state.selected_symptoms_persistent = set()
+
 # Extraction logic from text description
 def extract_symptoms_from_text(text, all_symptoms):
     extracted = set()
@@ -405,38 +461,51 @@ def extract_symptoms_from_text(text, all_symptoms):
 
 symptoms_from_text = extract_symptoms_from_text(description, ALL_SYMPTOMS)
 
-# Checklist selections
-selected_symptoms_from_checklist = [s for s in ALL_SYMPTOMS if st.session_state.get(s, False)]
+# 1. Update persistent symptoms with any new symptoms found in text
+for s in symptoms_from_text:
+    st.session_state.selected_symptoms_persistent.add(s)
 
-# Final merged list for calculation
-# Union of checklist selections + text-extracted keywords
-selected_symptoms = list(set(selected_symptoms_from_checklist) | symptoms_from_text)
+# 2. Selected symptoms summary (read from persistent state)
+selected_symptoms = list(st.session_state.selected_symptoms_persistent)
 
 if "symptom_page" not in st.session_state:
     st.session_state.symptom_page = 1
     
 ITEMS_PER_PAGE = 10
 
-# 1. Display currently selected summary
+# Display currently selected summary
 if selected_symptoms:
-    st.write(f"**Selected ({len(selected_symptoms)}):** {', '.join(selected_symptoms)}")
+    # Filter out empty or None just in case, though they shouldn't be there
+    display_list = [s.replace("_", " ").title() for s in selected_symptoms]
+    st.write(f"**Selected ({len(display_list)}):** {', '.join(display_list)}")
 
-# 2. Render Checkboxes for current page
+# 3. Render Checkboxes for current page
 start_idx = (st.session_state.symptom_page - 1) * ITEMS_PER_PAGE
 end_idx = start_idx + ITEMS_PER_PAGE
 current_batch = SORTED_SYMPTOMS[start_idx:end_idx]
+
+def toggle_symptom(sym_key):
+    """Callback to sync checkbox with persistent state."""
+    if st.session_state[sym_key]:
+        st.session_state.selected_symptoms_persistent.add(sym_key)
+    else:
+        st.session_state.selected_symptoms_persistent.discard(sym_key)
 
 if not current_batch:
     st.success("You have reached the end of the list.")
 else:
     st.write(f"**Set {st.session_state.symptom_page}**")
     
-    # Optional: Logic to see if we are in "Priority Zone"
-        
     for sym in current_batch:
-        # We rely on Streamlit's internal state for the checkbox.
-        # Key=sym ensures the state persists even when navigating pages.
-        st.checkbox(sym.replace("_", " ").title(), key=sym)
+        # We use a callback to ensure the selection is saved to 'selected_symptoms_persistent'
+        # even when the checkbox is no longer rendered on screen.
+        st.checkbox(
+            sym.replace("_", " ").title(), 
+            key=sym, 
+            value=(sym in st.session_state.selected_symptoms_persistent),
+            on_change=toggle_symptom,
+            args=(sym,)
+        )
 
 # 3. Navigation
 c_prev, c_center, c_next = st.columns([1, 1, 1])
